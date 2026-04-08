@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agenthack"
+version = "0.1.0"
+description = "Run an AI hackathon from your terminal"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "firecrawl-py>=1.0.0",
+    "typer>=0.12.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",
+    "aiohttp>=3.9.0",
+    "asyncio-throttle>=1.0.0",
+]
+
+[project.scripts]
+agenthack = "agenthack.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agenthack"]
+
+[tool.hatch.envs.default]
+python = "3.11"
