@@ -70,6 +70,9 @@ agenthack run --domains "healthcare" --no-build
 
 # Multiple domains
 agenthack run --domains "healthcare,devtools,fintech"
+
+# Skip Claude Code permission prompts during build (unattended runs)
+agenthack run --domains "healthcare" --dangerously-skip-permissions
 ```
 
 ### Other commands
@@ -84,6 +87,12 @@ agenthack judge --run-id <id> --weights market=0.3,tech=0.3,user=0.25,vc=0.15
 
 # Build a specific team's idea from a past run
 agenthack build --run-id <id> --team 5
+agenthack build --run-id <id> --team 5 --dangerously-skip-permissions
+
+# Publish demos to a persistent GitHub repo
+agenthack publish --run-id <id>
+agenthack publish --run-id <id> --repo my-demos          # custom repo name
+agenthack publish --run-id <id> --source-url https://github.com/you/agenthack
 
 # List past runs
 agenthack history
