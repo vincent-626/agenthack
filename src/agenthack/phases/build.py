@@ -100,8 +100,10 @@ async def _build_winner(
         "--print",
         "--output-format", "text",
         "--max-turns", "30",
-        build_prompt,
     ]
+    if config.dangerously_skip_permissions:
+        cmd.append("--dangerously-skip-permissions")
+    cmd.append(build_prompt)
 
     console.print(f"    Running Claude Code for winner #{rank}...")
     try:

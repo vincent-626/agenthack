@@ -52,6 +52,7 @@ def run(
     checkpoint_after_scout: bool = typer.Option(False, "--checkpoint-after-scout", help="Pause after scout phase"),
     checkpoint_after_judging: bool = typer.Option(False, "--checkpoint-after-judging", help="Pause after judging"),
     no_build: bool = typer.Option(False, "--no-build", help="Skip build phase (research + judge only)"),
+    dangerously_skip_permissions: bool = typer.Option(False, "--dangerously-skip-permissions", help="Pass --dangerously-skip-permissions to Claude Code in the build phase"),
     config_file: Optional[str] = typer.Option(None, "--config", help="Path to agenthack.yaml"),
     run_id: Optional[str] = typer.Option(None, "--run-id", help="Custom run ID (auto-generated if not set)"),
 ) -> None:
@@ -75,6 +76,7 @@ def run(
         checkpoint_after_scout=checkpoint_after_scout,
         checkpoint_after_judging=checkpoint_after_judging,
         no_build=no_build,
+        dangerously_skip_permissions=dangerously_skip_permissions,
         output_dir=str(run_dir),
         judge_weights={
             "market": app_config.judge_weights.get("market", 0.25),

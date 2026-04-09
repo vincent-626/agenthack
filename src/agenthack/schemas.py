@@ -136,6 +136,7 @@ class RunConfig(BaseModel):
     checkpoint_after_scout: bool = False
     checkpoint_after_judging: bool = False
     no_build: bool = False
+    dangerously_skip_permissions: bool = False
     output_dir: str = "output"
     judge_weights: dict[str, float] = Field(
         default_factory=lambda: {"market": 0.25, "technical": 0.25, "user": 0.25, "vc": 0.25}
