@@ -102,7 +102,7 @@ async def _build_winner(
         "claude",
         "-p", instruction,
         "--output-format", "text",
-        "--max-turns", "30",
+        "--max-turns", "60",
     ]
     if config.dangerously_skip_permissions:
         cmd.append("--dangerously-skip-permissions")
@@ -120,7 +120,7 @@ async def _build_winner(
             )
             await asyncio.wait_for(
                 proc.wait(),
-                timeout=600,
+                timeout=1800,
             )
 
         build_log = log_path.read_text()
