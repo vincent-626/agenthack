@@ -107,25 +107,24 @@ async def _build_winner(
     if config.dangerously_skip_permissions:
         cmd.append("--dangerously-skip-permissions")
 
-    console.print(f"    Running Claude Code for winner #{rank}...")
+    log_path = winner_dir / "build.log"
+    err_path = winner_dir / "build_errors.log"
+    console.print(f"    Running Claude Code for winner #{rank}... (tail -f {log_path})")
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(demo_dir),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=600,
-        )
+        with open(log_path, "w") as log_f, open(err_path, "w") as err_f:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=str(demo_dir),
+                stdout=log_f,
+                stderr=err_f,
+            )
+            await asyncio.wait_for(
+                proc.wait(),
+                timeout=600,
+            )
 
-        build_log = stdout.decode() if stdout else ""
-        build_err = stderr.decode() if stderr else ""
-
-        output.write_md(winner_dir / "build.log", build_log)
-        if build_err:
-            output.write_md(winner_dir / "build_errors.log", build_err)
+        build_log = log_path.read_text()
+        build_err = err_path.read_text()
 
         # Check that real files were created (exclude the prompt file we seeded)
         generated_files = [f for f in demo_dir.iterdir() if f.name != "build_prompt.md"] if demo_dir.exists() else []
