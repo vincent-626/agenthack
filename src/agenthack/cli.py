@@ -212,6 +212,21 @@ def build_cmd(
 
 
 @app.command()
+def publish(
+    run_id: str = typer.Option(..., "--run-id", help="Run ID to publish"),
+    repo_name: str = typer.Option("agenthack-demos", "--repo", help="GitHub repo name"),
+    local_dir: Optional[str] = typer.Option(None, "--local-dir", help="Local path for the demos repo (default: ~/agenthack-demos)"),
+    source_url: Optional[str] = typer.Option(None, "--source-url", help="GitHub URL of the agenthack repo (auto-detected if not set)"),
+) -> None:
+    """Publish demos from a run to a persistent GitHub repo."""
+    from .utils.publish import publish as do_publish, DEFAULT_LOCAL_DIR
+
+    dest = Path(local_dir) if local_dir else DEFAULT_LOCAL_DIR
+    console.print(f"Publishing run [bold]{run_id}[/bold] → [bold]{repo_name}[/bold]")
+    do_publish(run_id, OUTPUT_BASE, repo_name, dest, source_url or "")
+
+
+@app.command()
 def history() -> None:
     """List past runs."""
     if not OUTPUT_BASE.exists():

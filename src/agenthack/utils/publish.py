@@ -1,0 +1,214 @@
+"""Publish demos to a single persistent GitHub repo."""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+from rich.console import Console
+
+from .output import read_json, write_md
+
+console = Console()
+
+DEFAULT_REPO_NAME = "agenthack-demos"
+DEFAULT_LOCAL_DIR = Path.home() / "agenthack-demos"
+
+
+def _run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, cwd=cwd, check=check, capture_output=True, text=True)
+
+
+def _gh_available() -> bool:
+    try:
+        _run(["gh", "--version"])
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
+
+def _repo_exists_on_github(repo_name: str) -> bool:
+    result = _run(["gh", "repo", "view", repo_name], check=False)
+    return result.returncode == 0
+
+
+def ensure_demos_repo(local_dir: Path, repo_name: str) -> bool:
+    """Clone or create the demos repo locally. Returns True on success."""
+    if not _gh_available():
+        console.print("[red]GitHub CLI (gh) not found. Install it from https://cli.github.com[/red]")
+        return False
+
+    if local_dir.exists():
+        # Only pull if the remote already has commits (non-empty repo)
+        result = _run(["git", "ls-remote", "--heads", "origin", "main"], cwd=local_dir, check=False)
+        if result.stdout.strip():
+            console.print(f"  Pulling latest from {repo_name}...")
+            pull = _run(["git", "pull", "origin", "main", "--rebase"], cwd=local_dir, check=False)
+            if pull.returncode != 0:
+                console.print(f"  [yellow]git pull warning: {pull.stderr.strip()}[/yellow]")
+        return True
+
+    if _repo_exists_on_github(repo_name):
+        console.print(f"  Cloning existing repo {repo_name}...")
+        result = _run(["gh", "repo", "clone", repo_name, str(local_dir)], check=False)
+        if result.returncode != 0:
+            console.print(f"[red]Clone failed: {result.stderr.strip()}[/red]")
+            return False
+    else:
+        console.print(f"  Creating new GitHub repo: {repo_name}...")
+        result = _run(
+            ["gh", "repo", "create", repo_name, "--public", "--clone", f"--description=AgentHack demo collection"],
+            check=False,
+        )
+        if result.returncode != 0:
+            console.print(f"[red]Repo creation failed: {result.stderr.strip()}[/red]")
+            return False
+        # gh repo create --clone puts it in a subdir named repo_name
+        cloned = Path(repo_name)
+        if cloned.exists() and not local_dir.exists():
+            cloned.rename(local_dir)
+
+    return local_dir.exists()
+
+
+def _load_run_meta(run_dir: Path) -> dict:
+    """Load config + leaderboard from a run directory."""
+    meta = {"run_id": run_dir.name, "domains": [], "winners": []}
+    config_path = run_dir / "config.json"
+    if config_path.exists():
+        config = read_json(config_path)
+        meta["domains"] = config.get("domains", [])
+        meta["run_id"] = config.get("run_id", run_dir.name)
+
+    leaderboard_path = run_dir / "phase3" / "leaderboard.json"
+    if leaderboard_path.exists():
+        leaderboard = read_json(leaderboard_path)
+        for entry in leaderboard[:3]:
+            meta["winners"].append({
+                "rank": entry.get("rank", 0),
+                "title": entry.get("problem_title", ""),
+                "score": entry.get("final_score", 0),
+            })
+    return meta
+
+
+def _detect_agenthack_url() -> str:
+    """Try to get the GitHub URL of the agenthack repo itself."""
+    try:
+        result = _run(["gh", "repo", "view", "--json", "url", "-q", ".url"], check=False)
+        url = result.stdout.strip()
+        if url.startswith("http"):
+            return url
+    except Exception:
+        pass
+    return ""
+
+
+def _update_readme(local_dir: Path, runs_base: Path, source_url: str = "") -> None:
+    """Regenerate the top-level README from all run subdirectories."""
+    run_dirs = sorted(local_dir.iterdir(), reverse=True)
+    rows = []
+    for d in run_dirs:
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        source_run = runs_base / d.name
+        meta = _load_run_meta(source_run) if source_run.exists() else {"run_id": d.name, "domains": [], "winners": []}
+
+        domains = ", ".join(meta.get("domains", [])) or "—"
+        winners = meta.get("winners", [])
+
+        winner_cells = []
+        for w in winners[:3]:
+            title = w.get("title", "")
+            score = w.get("score", 0)
+            rank = w.get("rank", 0)
+            link = f"[{title}]({d.name}/winner_{rank}/)"
+            winner_cells.append(f"{link} ({score:.1f})")
+        while len(winner_cells) < 3:
+            winner_cells.append("—")
+
+        rows.append(f"| {meta['run_id']} | {domains} | {winner_cells[0]} | {winner_cells[1]} | {winner_cells[2]} |")
+
+    lines = [
+        "# AgentHack Demos",
+        "",
+        f"A collection of AI hackathon demos generated by [AgentHack]({source_url})." if source_url else "A collection of AI hackathon demos generated by AgentHack.",
+        "",
+        "## Runs",
+        "",
+        "| Run ID | Domains | 🥇 Winner | 🥈 Runner-up | 🥉 Third |",
+        "|--------|---------|-----------|-------------|---------|",
+        *rows,
+        "",
+    ]
+    write_md(local_dir / "README.md", "\n".join(lines))
+
+
+def publish(run_id: str, runs_base: Path, repo_name: str, local_dir: Path, source_url: str = "") -> bool:
+    """Copy demos from a run into the persistent repo and push."""
+    run_dir = runs_base / run_id
+    if not run_dir.exists():
+        console.print(f"[red]Run '{run_id}' not found at {run_dir}[/red]")
+        return False
+
+    phase4_dir = run_dir / "phase4"
+    if not phase4_dir.exists():
+        console.print(f"[red]No build output found for run '{run_id}'. Run the build phase first.[/red]")
+        return False
+
+    if not ensure_demos_repo(local_dir, repo_name):
+        return False
+
+    # Copy winner dirs into <local_dir>/<run_id>/
+    dest_run_dir = local_dir / run_id
+    dest_run_dir.mkdir(exist_ok=True)
+
+    winner_dirs = sorted(phase4_dir.glob("winner_*"))
+    if not winner_dirs:
+        console.print(f"[red]No winner directories found in {phase4_dir}[/red]")
+        return False
+
+    for winner_dir in winner_dirs:
+        dest = dest_run_dir / winner_dir.name
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(winner_dir, dest)
+        console.print(f"  Copied {winner_dir.name} → {dest.relative_to(local_dir)}")
+
+    # Regenerate top-level README
+    resolved_url = source_url or _detect_agenthack_url()
+    _update_readme(local_dir, runs_base, resolved_url)
+
+    # Commit and push
+    try:
+        _run(["git", "add", "-A"], cwd=local_dir)
+
+        commit_result = _run(
+            ["git", "commit", "-m", f"Add demos for run {run_id}"],
+            cwd=local_dir,
+            check=False,
+        )
+        if commit_result.returncode != 0:
+            if "nothing to commit" in commit_result.stdout or "nothing to commit" in commit_result.stderr:
+                console.print("  [dim]Nothing new to commit — repo already up to date.[/dim]")
+                return True
+            console.print(f"[red]Commit failed: {commit_result.stderr.strip()}[/red]")
+            return False
+
+        push_result = _run(["git", "push", "--set-upstream", "origin", "main"], cwd=local_dir, check=False)
+        if push_result.returncode != 0:
+            console.print(f"[red]Push failed: {push_result.stderr.strip()}[/red]")
+            return False
+        console.print(f"  [green]✓ Pushed to {repo_name}[/green]")
+
+        # Print the repo URL
+        result = _run(["gh", "repo", "view", "--json", "url", "-q", ".url"], cwd=local_dir, check=False)
+        if result.returncode == 0:
+            console.print(f"  [bold]{result.stdout.strip()}[/bold]")
+
+        return True
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Git error: {e.stderr.strip()}[/red]")
+        return False
