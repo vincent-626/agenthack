@@ -91,19 +91,21 @@ async def _build_winner(
         spec_md=spec_md[:8000],
         research_md=research_md[:4000],
     )
-    prompt_file = winner_dir / "build_prompt.md"
+    # Write into demo/ so it's within Claude Code's working directory sandbox
+    prompt_file = demo_dir / "build_prompt.md"
     output.write_md(prompt_file, build_prompt)
 
-    # Invoke Claude Code as a subprocess
+    # Invoke Claude Code as a subprocess.
+    # build_prompt.md lives in demo/ (the cwd), so Claude Code can read it freely.
+    instruction = "Read build_prompt.md and follow the instructions exactly to build the application in this directory. Delete build_prompt.md when done."
     cmd = [
         "claude",
-        "--print",
+        "-p", instruction,
         "--output-format", "text",
         "--max-turns", "30",
     ]
     if config.dangerously_skip_permissions:
         cmd.append("--dangerously-skip-permissions")
-    cmd.append(build_prompt)
 
     console.print(f"    Running Claude Code for winner #{rank}...")
     try:
@@ -113,7 +115,10 @@ async def _build_winner(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=600)
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=600,
+        )
 
         build_log = stdout.decode() if stdout else ""
         build_err = stderr.decode() if stderr else ""
@@ -122,12 +127,22 @@ async def _build_winner(
         if build_err:
             output.write_md(winner_dir / "build_errors.log", build_err)
 
-        if proc.returncode == 0:
-            console.print(f"  [green]✓ Winner #{rank} built successfully[/green]")
+        # Check that real files were created (exclude the prompt file we seeded)
+        generated_files = [f for f in demo_dir.iterdir() if f.name != "build_prompt.md"] if demo_dir.exists() else []
+
+        if proc.returncode == 0 and generated_files:
+            console.print(f"  [green]✓ Winner #{rank} built successfully ({len(generated_files)} files)[/green]")
             return True
+        elif proc.returncode == 0 and not generated_files:
+            console.print(f"  [red]✗ Winner #{rank}: Claude Code exited cleanly but created no files[/red]")
+            if build_log:
+                console.print(f"  [dim]{build_log[:500]}[/dim]")
+            return False
         else:
-            console.print(f"  [yellow]~ Winner #{rank} build completed with warnings[/yellow]")
-            return True
+            console.print(f"  [red]✗ Winner #{rank} build failed (exit code {proc.returncode})[/red]")
+            if build_err:
+                console.print(f"  [dim]{build_err[:500]}[/dim]")
+            return False
 
     except asyncio.TimeoutError:
         console.print(f"  [red]✗ Winner #{rank} build timed out[/red]")
