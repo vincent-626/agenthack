@@ -4,6 +4,8 @@ Run an AI hackathon from your terminal.
 
 Given a set of domains, AgentHack discovers real-world problems, spins up parallel agent teams to research and strategize, judges the results, then builds working demos for the top 3 winners.
 
+**Demo collection**: [github.com/vincent-626/agenthack-demos](https://github.com/vincent-626/agenthack-demos)
+
 ```
 agenthack run --domains "healthcare,devtools" --depth standard
 ```
