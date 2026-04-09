@@ -161,6 +161,7 @@ def judge_cmd(
 def build_cmd(
     run_id: str = typer.Option(..., "--run-id", help="Run ID"),
     team: int = typer.Option(..., "--team", help="Team number to build"),
+    dangerously_skip_permissions: bool = typer.Option(False, "--dangerously-skip-permissions", help="Pass --dangerously-skip-permissions to Claude Code"),
 ) -> None:
     """Build a specific team's demo from a past run."""
     from .phases import build as build_phase
@@ -169,6 +170,8 @@ def build_cmd(
     config = _load_run_config(run_id)
     if not config:
         return
+
+    config.dangerously_skip_permissions = dangerously_skip_permissions
 
     team_dir = Path(config.output_dir) / "phase2" / f"team_{team:03d}"
     if not team_dir.exists():
