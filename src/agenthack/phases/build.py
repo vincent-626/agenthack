@@ -172,14 +172,20 @@ async def _build_winner(
 
     except asyncio.TimeoutError:
         console.print(f"  [red]✗ Winner #{rank} build timed out[/red]")
+        try:
+            proc.kill()
+            await proc.wait()
+        except Exception:
+            pass
+        _write_placeholder_readme(demo_dir, entry, spec, research)
         return False
     except FileNotFoundError:
         console.print(f"  [red]✗ Claude Code CLI not found. Install it with: npm install -g @anthropic-ai/claude-code[/red]")
-        # Write a placeholder README
         _write_placeholder_readme(demo_dir, entry, spec, research)
         return False
     except Exception as e:
         console.print(f"  [red]✗ Winner #{rank} build error: {e}[/red]")
+        _write_placeholder_readme(demo_dir, entry, spec, research)
         return False
 
 

@@ -214,10 +214,11 @@ async def _judge_one(
 
     try:
         data = llm.extract_json(response)
+        raw_score = float(data.get("score", 5.0))
         score = JudgeScore(
             problem_id=problem.id,
             judge_type=judge_type,
-            score=float(data.get("score", 5.0)),
+            score=max(0.0, min(10.0, raw_score)),
             strengths=data.get("strengths", []),
             weaknesses=data.get("weaknesses", []),
             verdict=data.get("verdict", ""),
@@ -318,7 +319,9 @@ async def run_judging(
         # Fallback: compute manually
         leaderboard = _compute_leaderboard_fallback(scores_by_problem, problems_map, weights)
 
-    leaderboard.sort(key=lambda e: e.rank)
+    leaderboard.sort(key=lambda e: e.final_score, reverse=True)
+    for i, e in enumerate(leaderboard):
+        e.rank = i + 1
 
     # Write outputs
     output.write_json(output_dir / "leaderboard.json", leaderboard)

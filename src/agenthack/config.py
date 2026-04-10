@@ -40,8 +40,11 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     candidates = [path, "agenthack.yaml", Path.home() / ".agenthack.yaml"]
     for candidate in candidates:
         if candidate and Path(candidate).exists():
-            with open(candidate) as f:
-                raw = yaml.safe_load(f) or {}
+            try:
+                with open(candidate) as f:
+                    raw = yaml.safe_load(f) or {}
+            except yaml.YAMLError as e:
+                raise SystemExit(f"[red]Invalid YAML in config file {candidate}: {e}[/red]")
             raw = _resolve_env(raw)
             return AppConfig(**raw)
     return AppConfig()

@@ -61,6 +61,9 @@ def run(
 
     # Depth defaults for team count
     depth_teams = {"fast": 5, "standard": 10, "deep": 15}
+    if depth not in depth_teams:
+        console.print(f"[red]Invalid depth '{depth}'. Must be one of: fast, standard, deep[/red]")
+        raise typer.Exit(1)
     if teams is None:
         teams = app_config.defaults.get("teams", depth_teams.get(depth, 10))
 
@@ -121,10 +124,13 @@ def judge_cmd(
         return
 
     if weights:
+        key_map = {"market": "market", "tech": "technical", "user": "user", "vc": "vc"}
         for pair in weights.split(","):
-            k, v = pair.split("=")
-            key_map = {"market": "market", "tech": "technical", "user": "user", "vc": "vc"}
-            config.judge_weights[key_map.get(k, k)] = float(v)
+            try:
+                k, v = pair.split("=")
+                config.judge_weights[key_map.get(k.strip(), k.strip())] = float(v)
+            except (ValueError, KeyError):
+                console.print(f"[yellow]Skipping invalid weight '{pair}' — expected format key=value[/yellow]")
 
     # Load existing phase2 outputs
     phase2_dir = Path(config.output_dir) / "phase2"

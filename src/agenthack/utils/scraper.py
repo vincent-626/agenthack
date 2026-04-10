@@ -10,6 +10,8 @@ def _get_client():
     try:
         from firecrawl import FirecrawlApp
         api_key = os.environ.get("FIRECRAWL_API_KEY", "")
+        if not api_key:
+            return None
         return FirecrawlApp(api_key=api_key)
     except ImportError:
         return None
