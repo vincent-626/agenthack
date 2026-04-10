@@ -40,6 +40,62 @@ The demo should be production-quality in UX but MVP in scope.
 IMPORTANT: The demo MUST work when run. Test your implementation."""
 
 
+def _render_spec(spec: ProductSpec | None) -> str:
+    if not spec:
+        return "No spec available."
+    lines = [
+        f"# {spec.product_name}",
+        f"**Pitch:** {spec.pitch}",
+        f"**Value prop:** {spec.value_prop}",
+        f"**Differentiator:** {spec.differentiator}",
+        f"**Demo format:** {spec.demo_format}",
+        f"\n## Tech Stack",
+        f"- Frontend: {spec.tech_stack.frontend}",
+        f"- Backend: {spec.tech_stack.backend}",
+        f"- Database: {spec.tech_stack.database}",
+        f"- Libraries: {', '.join(spec.tech_stack.key_libraries)}",
+        f"\n## MVP Features",
+    ]
+    for f in spec.mvp_features:
+        lines.append(f"### {f.name}\n{f.description}")
+        if f.user_flow:
+            lines.append("User flow: " + " → ".join(f.user_flow))
+        if f.acceptance_criteria:
+            lines += [f"- {c}" for c in f.acceptance_criteria]
+    if spec.data_model.entities:
+        lines.append("\n## Data Model")
+        for e in spec.data_model.entities:
+            lines.append(f"**{e.name}:** {', '.join(e.fields)}")
+    if spec.seed_data:
+        lines += ["\n## Seed Data", spec.seed_data]
+    if spec.monetization:
+        lines += ["\n## Monetization", spec.monetization]
+    if spec.out_of_scope:
+        lines += ["\n## Out of Scope", ", ".join(spec.out_of_scope)]
+    return "\n".join(lines)
+
+
+def _render_research(research: ResearchBrief | None) -> str:
+    if not research:
+        return "No research available."
+    p = research.target_persona
+    lines = [
+        f"**Target user:** {p.role} at {p.company_size} — pays {p.willingness_to_pay}",
+        f"**Current workflow:** {p.current_workflow}",
+        f"**Key insight:** {research.key_insight}",
+    ]
+    if research.timing_signals:
+        lines += ["\n**Timing signals:**"] + [f"- {s}" for s in research.timing_signals]
+    if research.feasibility_flags:
+        lines += ["\n**Feasibility flags:**"] + [f"- {f}" for f in research.feasibility_flags]
+    if research.competitors:
+        lines.append("\n**Competitors:**")
+        for c in research.competitors:
+            weak = "; ".join(c.weaknesses[:2])
+            lines.append(f"- {c.name} ({c.pricing}) — gaps: {weak}")
+    return "\n".join(lines)
+
+
 async def _build_winner(
     rank: int,
     entry: LeaderboardEntry,
@@ -55,41 +111,12 @@ async def _build_winner(
 
     console.print(f"  [cyan]Building Winner #{rank}:[/cyan] {entry.problem_title}")
 
-    # Write the spec and research to the demo directory
-    spec_text = spec.model_dump_json(indent=2) if spec else "No spec available"
-    research_text = research.model_dump_json(indent=2) if research else "No research available"
-
-    # Also write human-readable versions
-    spec_md_path = winner_dir / "spec.md"
-    research_md_path = winner_dir / "research.md"
-
-    # Read the markdown files from phase2 if they exist
-    team_dirs = list((Path(config.output_dir) / "phase2").glob("team_*"))
-    spec_md = spec_text
-    research_md = research_text
-    for team_dir in team_dirs:
-        spec_json = team_dir / "spec.json"
-        if spec_json.exists():
-            try:
-                import json
-                data = json.loads(spec_json.read_text())
-                if data.get("problem_id") == problem.id:
-                    spec_md_file = team_dir / "spec.md"
-                    research_md_file = team_dir / "research.md"
-                    if spec_md_file.exists():
-                        spec_md = spec_md_file.read_text()
-                    if research_md_file.exists():
-                        research_md = research_md_file.read_text()
-                    break
-            except Exception:
-                pass
-
-    output.write_md(spec_md_path, spec_md)
-    output.write_md(research_md_path, research_md)
+    spec_md = _render_spec(spec)
+    research_md = _render_research(research)
 
     build_prompt = BUILD_PROMPT_TEMPLATE.format(
-        spec_md=spec_md[:8000],
-        research_md=research_md[:4000],
+        spec_md=spec_md,
+        research_md=research_md,
     )
     # Write into demo/ so it's within Claude Code's working directory sandbox
     prompt_file = demo_dir / "build_prompt.md"
