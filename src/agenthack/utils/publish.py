@@ -174,7 +174,14 @@ def publish(run_id: str, runs_base: Path, repo_name: str, local_dir: Path, sourc
         dest = dest_run_dir / winner_dir.name
         if dest.exists():
             shutil.rmtree(dest)
-        shutil.copytree(winner_dir, dest)
+        shutil.copytree(
+            winner_dir,
+            dest,
+            ignore=shutil.ignore_patterns(
+                "node_modules", ".git", "__pycache__", "*.pyc",
+                ".venv", "venv", ".env", "dist", ".next", ".cache",
+            ),
+        )
         console.print(f"  Copied {winner_dir.name} → {dest.relative_to(local_dir)}")
 
     # Regenerate top-level README
